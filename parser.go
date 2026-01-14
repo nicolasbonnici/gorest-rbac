@@ -53,6 +53,10 @@ func ParseAnnotations(resource interface{}) (PermissionSet, error) {
 	}
 
 	annotationCacheMu.Lock()
+	if cached, ok := annotationCache[t]; ok {
+		annotationCacheMu.Unlock()
+		return cached, nil
+	}
 	annotationCache[t] = permissions
 	annotationCacheMu.Unlock()
 

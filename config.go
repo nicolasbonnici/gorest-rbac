@@ -32,6 +32,15 @@ type Config struct {
 	// DefaultFieldPolicy determines what happens when a field has no rbac tag
 	// Can be "deny" (no access) or "allow" (full access)
 	DefaultFieldPolicy string `yaml:"default_field_policy" json:"default_field_policy"`
+
+	// StrictValidation controls whether zero values are validated during write operations.
+	// When true, ALL fields (including zero values) are validated against permissions.
+	// When false (default), zero values bypass validation for backwards compatibility.
+	//
+	// Security Note: Setting this to false may allow attackers to bypass validation by
+	// setting restricted fields to their zero values (empty string, 0, false, nil, etc.).
+	// It is recommended to enable StrictValidation in production environments.
+	StrictValidation bool `yaml:"strict_validation" json:"strict_validation"`
 }
 
 func DefaultConfig() Config {
@@ -43,6 +52,7 @@ func DefaultConfig() Config {
 		CacheTTL:           300, // 5 minutes
 		StrictMode:         true,
 		DefaultFieldPolicy: "deny",
+		StrictValidation:   false,
 	}
 }
 
@@ -142,4 +152,5 @@ func (c *Config) Merge(other Config) {
 	}
 	c.CacheEnabled = other.CacheEnabled
 	c.StrictMode = other.StrictMode
+	c.StrictValidation = other.StrictValidation
 }

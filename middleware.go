@@ -31,34 +31,21 @@ func Middleware(voter Voter, roleProvider RoleProvider) fiber.Handler {
 
 func RequireRole(voter Voter, roleProvider RoleProvider, requiredRoles ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Extract roles
 		ctx := c.Context()
 		roles, err := roleProvider.GetRoles(ctx)
 		if err != nil {
 			return fiber.NewError(fiber.StatusUnauthorized, "failed to extract roles")
 		}
 
-		// Add to context
 		ctxWithRoles := WithRoles(ctx, roles)
 		c.SetUserContext(ctxWithRoles)
 
-		// Get voter config - we need to cast to the concrete type
-		v, ok := voter.(*defaultVoter)
-		if !ok {
-			return fiber.NewError(fiber.StatusInternalServerError, "invalid voter type")
+		if voter.IsSuperuser(roles) {
+			return c.Next()
 		}
 
-		// Check for superuser
-		expandedRoles := ResolveRoles(roles, v.config.RoleHierarchy)
-		for _, role := range expandedRoles {
-			if role == v.config.SuperuserRole {
-				// Superuser bypasses all checks
-				return c.Next()
-			}
-		}
-
-		// Check if user has any of the required roles
-		if !HasAnyRole(roles, requiredRoles, v.config.RoleHierarchy) {
+		config := voter.GetConfig()
+		if !HasAnyRole(roles, requiredRoles, config.RoleHierarchy) {
 			return fiber.NewError(fiber.StatusForbidden, "insufficient permissions")
 		}
 

@@ -11,6 +11,8 @@ type Voter interface {
 	CheckWrite(ctx context.Context, resource interface{}, field string) error
 	FilterRead(ctx context.Context, resource interface{}) (interface{}, error)
 	ValidateWrite(ctx context.Context, resource interface{}) error
+	GetConfig() Config
+	IsSuperuser(roles []string) bool
 }
 
 // defaultVoter implements the Voter interface
@@ -165,7 +167,15 @@ func (v *defaultVoter) isSuperuser(roles []string) bool {
 	return false
 }
 
-// handleFieldWithoutAnnotation applies the default field policy
+func (v *defaultVoter) GetConfig() Config {
+	return v.config
+}
+
+func (v *defaultVoter) IsSuperuser(roles []string) bool {
+	expandedRoles := ResolveRoles(roles, v.config.RoleHierarchy)
+	return v.isSuperuser(expandedRoles)
+}
+
 func (v *defaultVoter) handleFieldWithoutAnnotation(field, operation string, userRoles []string) error {
 	if v.config.DefaultFieldPolicy == "allow" {
 		return nil

@@ -20,6 +20,10 @@ func NewRepository(db database.Database) *Repository {
 }
 
 func (r *Repository) GetUserRoles(ctx context.Context, userID string) ([]string, error) {
+	if _, err := uuid.Parse(userID); err != nil {
+		return nil, fmt.Errorf("invalid user ID format: %w", err)
+	}
+
 	query := `
 		SELECT r.name
 		FROM user_roles ur
@@ -51,9 +55,20 @@ func (r *Repository) GetUserRoles(ctx context.Context, userID string) ([]string,
 }
 
 func (r *Repository) AssignRole(ctx context.Context, userID, roleName, assignedBy string) error {
+	if _, err := uuid.Parse(userID); err != nil {
+		return fmt.Errorf("invalid user ID format: %w", err)
+	}
+
+	if _, err := uuid.Parse(assignedBy); err != nil {
+		return fmt.Errorf("invalid assignedBy ID format: %w", err)
+	}
+
 	var roleID string
 	err := r.db.QueryRow(ctx, "SELECT id FROM roles WHERE name = $1", roleName).Scan(&roleID)
 	if err == sql.ErrNoRows {
+		if logErr := r.logAudit(ctx, userID, "promote", roleName, assignedBy, false, "role not found"); logErr != nil {
+			return fmt.Errorf("role not found (audit log failed: %v)", logErr)
+		}
 		return ErrRoleNotFound
 	} else if err != nil {
 		return fmt.Errorf("failed to find role: %w", err)
@@ -67,18 +82,34 @@ func (r *Repository) AssignRole(ctx context.Context, userID, roleName, assignedB
 
 	_, err = r.db.Exec(ctx, query, userID, roleID, assignedBy, time.Now())
 	if err != nil {
+		if logErr := r.logAudit(ctx, userID, "promote", roleName, assignedBy, false, err.Error()); logErr != nil {
+			return fmt.Errorf("failed to assign role: %w (audit log failed: %v)", err, logErr)
+		}
 		return fmt.Errorf("failed to assign role: %w", err)
 	}
 
-	r.logAudit(ctx, userID, "promote", roleName, assignedBy, true, "")
+	if err := r.logAudit(ctx, userID, "promote", roleName, assignedBy, true, ""); err != nil {
+		return fmt.Errorf("role assigned but audit log failed: %w", err)
+	}
 
 	return nil
 }
 
 func (r *Repository) RemoveRole(ctx context.Context, userID, roleName, removedBy string) error {
+	if _, err := uuid.Parse(userID); err != nil {
+		return fmt.Errorf("invalid user ID format: %w", err)
+	}
+
+	if _, err := uuid.Parse(removedBy); err != nil {
+		return fmt.Errorf("invalid removedBy ID format: %w", err)
+	}
+
 	var roleID string
 	err := r.db.QueryRow(ctx, "SELECT id FROM roles WHERE name = $1", roleName).Scan(&roleID)
 	if err == sql.ErrNoRows {
+		if logErr := r.logAudit(ctx, userID, "demote", roleName, removedBy, false, "role not found"); logErr != nil {
+			return fmt.Errorf("role not found (audit log failed: %v)", logErr)
+		}
 		return ErrRoleNotFound
 	} else if err != nil {
 		return fmt.Errorf("failed to find role: %w", err)
@@ -87,15 +118,23 @@ func (r *Repository) RemoveRole(ctx context.Context, userID, roleName, removedBy
 	query := "DELETE FROM user_roles WHERE user_id = $1 AND role_id = $2"
 	result, err := r.db.Exec(ctx, query, userID, roleID)
 	if err != nil {
+		if logErr := r.logAudit(ctx, userID, "demote", roleName, removedBy, false, err.Error()); logErr != nil {
+			return fmt.Errorf("failed to remove role: %w (audit log failed: %v)", err, logErr)
+		}
 		return fmt.Errorf("failed to remove role: %w", err)
 	}
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
+		if logErr := r.logAudit(ctx, userID, "demote", roleName, removedBy, false, "user does not have role"); logErr != nil {
+			return fmt.Errorf("user does not have role %s (audit log failed: %v)", roleName, logErr)
+		}
 		return fmt.Errorf("user does not have role %s", roleName)
 	}
 
-	r.logAudit(ctx, userID, "demote", roleName, removedBy, true, "")
+	if err := r.logAudit(ctx, userID, "demote", roleName, removedBy, true, ""); err != nil {
+		return fmt.Errorf("role removed but audit log failed: %w", err)
+	}
 
 	return nil
 }
@@ -175,6 +214,12 @@ func (r *Repository) ListUsers(ctx context.Context) ([]UserRoles, error) {
 
 	var users []UserRoles
 	for rows.Next() {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
 		var userRoles UserRoles
 		if err := rows.Scan(&userRoles.UserID, &userRoles.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
@@ -233,13 +278,18 @@ func (r *Repository) DeleteRole(ctx context.Context, name string) error {
 	return nil
 }
 
-func (r *Repository) logAudit(ctx context.Context, userID, action, role, actor string, success bool, errorMsg string) {
+func (r *Repository) logAudit(ctx context.Context, userID, action, role, actor string, success bool, errorMsg string) error {
 	query := `
 		INSERT INTO rbac_audit_log (user_id, action, role, actor, success, error)
 		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''))
 	`
 
-	_, _ = r.db.Exec(ctx, query, userID, action, role, actor, success, errorMsg)
+	_, err := r.db.Exec(ctx, query, userID, action, role, actor, success, errorMsg)
+	if err != nil {
+		return fmt.Errorf("failed to log audit entry: %w", err)
+	}
+
+	return nil
 }
 
 func (r *Repository) GetAuditLog(ctx context.Context, limit int) ([]AuditEntry, error) {

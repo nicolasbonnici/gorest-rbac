@@ -5,7 +5,8 @@ import (
 	"reflect"
 )
 
-// validateWriteFields validates that all non-zero fields in the resource can be written by the user
+// validateWriteFields validates that all non-zero fields in the resource can be written by the user.
+// If config.StrictValidation is true, ALL fields (including zero values) are validated.
 func validateWriteFields(resource interface{}, userRoles []string, config Config) error {
 	val := reflect.ValueOf(resource)
 	typ := reflect.TypeOf(resource)
@@ -35,7 +36,7 @@ func validateWriteFields(resource interface{}, userRoles []string, config Config
 
 		fieldValue := val.Field(i)
 
-		if isZeroValue(fieldValue) {
+		if !config.StrictValidation && isZeroValue(fieldValue) {
 			continue
 		}
 

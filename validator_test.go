@@ -586,3 +586,332 @@ func TestValidateWriteFieldsNestedStruct(t *testing.T) {
 		})
 	}
 }
+
+func TestStrictValidation(t *testing.T) {
+	ClearCache()
+
+	type StrictTestResource struct {
+		PublicField     string `rbac:"read:*;write:*"`
+		AdminField      string `rbac:"read:admin;write:admin"`
+		IntField        int    `rbac:"write:admin"`
+		BoolField       bool   `rbac:"write:admin"`
+		NoTagField      string
+		AnotherNoTagField int
+	}
+
+	tests := []struct {
+		name            string
+		resource        StrictTestResource
+		userRoles       []string
+		strictMode      bool
+		expectError     bool
+		forbiddenFields []string
+	}{
+		{
+			name: "strict mode disabled - zero values bypass validation",
+			resource: StrictTestResource{
+				AdminField: "",
+				IntField:   0,
+				BoolField:  false,
+			},
+			userRoles:   []string{"user"},
+			strictMode:  false,
+			expectError: false,
+		},
+		{
+			name: "strict mode enabled - zero string validated",
+			resource: StrictTestResource{
+				PublicField: "allowed",
+				AdminField:  "",
+			},
+			userRoles:       []string{"user"},
+			strictMode:      true,
+			expectError:     true,
+			forbiddenFields: []string{"AdminField", "IntField", "BoolField", "NoTagField", "AnotherNoTagField"},
+		},
+		{
+			name: "strict mode enabled - zero int validated",
+			resource: StrictTestResource{
+				PublicField: "allowed",
+				IntField:    0,
+			},
+			userRoles:       []string{"user"},
+			strictMode:      true,
+			expectError:     true,
+			forbiddenFields: []string{"AdminField", "IntField", "BoolField", "NoTagField", "AnotherNoTagField"},
+		},
+		{
+			name: "strict mode enabled - false bool validated",
+			resource: StrictTestResource{
+				PublicField: "allowed",
+				BoolField:   false,
+			},
+			userRoles:       []string{"user"},
+			strictMode:      true,
+			expectError:     true,
+			forbiddenFields: []string{"AdminField", "IntField", "BoolField", "NoTagField", "AnotherNoTagField"},
+		},
+		{
+			name: "strict mode enabled - all zero fields validated",
+			resource: StrictTestResource{
+				PublicField: "allowed",
+				AdminField:  "",
+				IntField:    0,
+				BoolField:   false,
+				NoTagField:  "",
+			},
+			userRoles:       []string{"user"},
+			strictMode:      true,
+			expectError:     true,
+			forbiddenFields: []string{"AdminField", "IntField", "BoolField", "NoTagField", "AnotherNoTagField"},
+		},
+		{
+			name: "strict mode enabled - admin blocked by zero-valued NoTagField with deny policy",
+			resource: StrictTestResource{
+				PublicField: "allowed",
+				AdminField:  "",
+				IntField:    0,
+				BoolField:   false,
+			},
+			userRoles:       []string{"admin"},
+			strictMode:      true,
+			expectError:     true,
+			forbiddenFields: []string{"NoTagField", "AnotherNoTagField"},
+		},
+		{
+			name: "strict mode enabled - public field allowed with zero value",
+			resource: StrictTestResource{
+				PublicField: "",
+			},
+			userRoles:       []string{"user"},
+			strictMode:      true,
+			expectError:     true,
+			forbiddenFields: []string{"AdminField", "IntField", "BoolField", "NoTagField", "AnotherNoTagField"},
+		},
+		{
+			name: "strict mode enabled - no tag field with deny policy",
+			resource: StrictTestResource{
+				PublicField: "allowed",
+				NoTagField:  "",
+			},
+			userRoles:       []string{"user"},
+			strictMode:      true,
+			expectError:     true,
+			forbiddenFields: []string{"AdminField", "IntField", "BoolField", "NoTagField", "AnotherNoTagField"},
+		},
+		{
+			name: "strict mode disabled - non-zero values still validated",
+			resource: StrictTestResource{
+				AdminField: "value",
+			},
+			userRoles:       []string{"user"},
+			strictMode:      false,
+			expectError:     true,
+			forbiddenFields: []string{"AdminField"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := DefaultConfig()
+			config.StrictValidation = tt.strictMode
+
+			err := validateWriteFields(tt.resource, tt.userRoles, config)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error, got nil")
+					return
+				}
+
+				if len(tt.forbiddenFields) > 0 {
+					validationErr, ok := err.(*ValidationError)
+					if !ok {
+						t.Errorf("expected ValidationError, got %T", err)
+						return
+					}
+
+					if len(validationErr.ForbiddenFields) != len(tt.forbiddenFields) {
+						t.Errorf("expected %d forbidden fields, got %d", len(tt.forbiddenFields), len(validationErr.ForbiddenFields))
+					}
+
+					for _, expected := range tt.forbiddenFields {
+						found := false
+						for _, actual := range validationErr.ForbiddenFields {
+							if actual == expected {
+								found = true
+								break
+							}
+						}
+						if !found {
+							t.Errorf("expected forbidden field %s not found in %v", expected, validationErr.ForbiddenFields)
+						}
+					}
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestStrictValidationComplexTypes(t *testing.T) {
+	ClearCache()
+
+	type ComplexStrictResource struct {
+		PublicField string            `rbac:"write:*"`
+		SliceField  []string          `rbac:"write:admin"`
+		MapField    map[string]string `rbac:"write:admin"`
+		PtrField    *string           `rbac:"write:admin"`
+	}
+
+	tests := []struct {
+		name            string
+		resource        ComplexStrictResource
+		userRoles       []string
+		strictMode      bool
+		expectError     bool
+		forbiddenFields []string
+	}{
+		{
+			name: "strict mode disabled - nil slice bypasses validation",
+			resource: ComplexStrictResource{
+				SliceField: nil,
+			},
+			userRoles:   []string{"user"},
+			strictMode:  false,
+			expectError: false,
+		},
+		{
+			name: "strict mode enabled - nil slice validated",
+			resource: ComplexStrictResource{
+				PublicField: "allowed",
+				SliceField:  nil,
+			},
+			userRoles:       []string{"user"},
+			strictMode:      true,
+			expectError:     true,
+			forbiddenFields: []string{"SliceField", "MapField", "PtrField"},
+		},
+		{
+			name: "strict mode disabled - empty slice bypasses validation",
+			resource: ComplexStrictResource{
+				SliceField: []string{},
+			},
+			userRoles:   []string{"user"},
+			strictMode:  false,
+			expectError: false,
+		},
+		{
+			name: "strict mode enabled - empty slice validated",
+			resource: ComplexStrictResource{
+				PublicField: "allowed",
+				SliceField:  []string{},
+			},
+			userRoles:       []string{"user"},
+			strictMode:      true,
+			expectError:     true,
+			forbiddenFields: []string{"SliceField", "MapField", "PtrField"},
+		},
+		{
+			name: "strict mode disabled - nil map bypasses validation",
+			resource: ComplexStrictResource{
+				MapField: nil,
+			},
+			userRoles:   []string{"user"},
+			strictMode:  false,
+			expectError: false,
+		},
+		{
+			name: "strict mode enabled - nil map validated",
+			resource: ComplexStrictResource{
+				PublicField: "allowed",
+				MapField:    nil,
+			},
+			userRoles:       []string{"user"},
+			strictMode:      true,
+			expectError:     true,
+			forbiddenFields: []string{"SliceField", "MapField", "PtrField"},
+		},
+		{
+			name: "strict mode disabled - nil pointer bypasses validation",
+			resource: ComplexStrictResource{
+				PtrField: nil,
+			},
+			userRoles:   []string{"user"},
+			strictMode:  false,
+			expectError: false,
+		},
+		{
+			name: "strict mode enabled - nil pointer validated",
+			resource: ComplexStrictResource{
+				PublicField: "allowed",
+				PtrField:    nil,
+			},
+			userRoles:       []string{"user"},
+			strictMode:      true,
+			expectError:     true,
+			forbiddenFields: []string{"SliceField", "MapField", "PtrField"},
+		},
+		{
+			name: "strict mode enabled - all nil complex types validated",
+			resource: ComplexStrictResource{
+				PublicField: "allowed",
+				SliceField:  nil,
+				MapField:    nil,
+				PtrField:    nil,
+			},
+			userRoles:       []string{"user"},
+			strictMode:      true,
+			expectError:     true,
+			forbiddenFields: []string{"SliceField", "MapField", "PtrField"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := DefaultConfig()
+			config.StrictValidation = tt.strictMode
+
+			err := validateWriteFields(tt.resource, tt.userRoles, config)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error, got nil")
+					return
+				}
+
+				if len(tt.forbiddenFields) > 0 {
+					validationErr, ok := err.(*ValidationError)
+					if !ok {
+						t.Errorf("expected ValidationError, got %T", err)
+						return
+					}
+
+					if len(validationErr.ForbiddenFields) != len(tt.forbiddenFields) {
+						t.Errorf("expected %d forbidden fields, got %d", len(tt.forbiddenFields), len(validationErr.ForbiddenFields))
+					}
+
+					for _, expected := range tt.forbiddenFields {
+						found := false
+						for _, actual := range validationErr.ForbiddenFields {
+							if actual == expected {
+								found = true
+								break
+							}
+						}
+						if !found {
+							t.Errorf("expected forbidden field %s not found in %v", expected, validationErr.ForbiddenFields)
+						}
+					}
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}

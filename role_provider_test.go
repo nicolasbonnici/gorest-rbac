@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/valyala/fasthttp"
 )
 
 func TestNewDefaultRoleProvider(t *testing.T) {
@@ -141,7 +142,8 @@ func TestFiberRoleProviderGetRoles(t *testing.T) {
 			name: "roles from fiber context - string slice",
 			setupContext: func() context.Context {
 				app := fiber.New()
-				c := app.AcquireCtx(&fiber.Ctx{})
+				reqCtx := &fasthttp.RequestCtx{}
+				c := app.AcquireCtx(reqCtx)
 				c.Locals("user_roles", []string{"admin", "user"})
 				return context.WithValue(context.Background(), "fiber_ctx", c)
 			},
@@ -152,7 +154,8 @@ func TestFiberRoleProviderGetRoles(t *testing.T) {
 			name: "roles from fiber context - single string",
 			setupContext: func() context.Context {
 				app := fiber.New()
-				c := app.AcquireCtx(&fiber.Ctx{})
+				reqCtx := &fasthttp.RequestCtx{}
+				c := app.AcquireCtx(reqCtx)
 				c.Locals("user_roles", "admin")
 				return context.WithValue(context.Background(), "fiber_ctx", c)
 			},
@@ -179,7 +182,8 @@ func TestFiberRoleProviderGetRoles(t *testing.T) {
 			name: "fiber context with no roles",
 			setupContext: func() context.Context {
 				app := fiber.New()
-				c := app.AcquireCtx(&fiber.Ctx{})
+				reqCtx := &fasthttp.RequestCtx{}
+				c := app.AcquireCtx(reqCtx)
 				return context.WithValue(context.Background(), "fiber_ctx", c)
 			},
 			expectedRoles: []string{},

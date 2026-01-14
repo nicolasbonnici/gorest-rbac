@@ -66,7 +66,7 @@ func TestMiddleware(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			app := fiber.New()
 
-			app.Use(Middleware(&voter, tt.roleProvider))
+			app.Use(Middleware(voter, tt.roleProvider))
 
 			app.Get("/test", func(c *fiber.Ctx) error {
 				roles := c.Locals("user_roles")
@@ -165,7 +165,7 @@ func TestRequireRole(t *testing.T) {
 				err:   tt.providerError,
 			}
 
-			app.Use(RequireRole(&voter, roleProvider, tt.requiredRoles...))
+			app.Use(RequireRole(voter, roleProvider, tt.requiredRoles...))
 
 			app.Get("/test", func(c *fiber.Ctx) error {
 				return c.SendString("success")
@@ -266,7 +266,7 @@ func TestValidateRequest(t *testing.T) {
 			}
 
 			resourceType := &TestBody{}
-			app.Use(ValidateRequest(&voter, roleProvider, resourceType))
+			app.Use(ValidateRequest(voter, roleProvider, resourceType))
 
 			app.All("/test", func(c *fiber.Ctx) error {
 				return c.SendString("success")
@@ -331,7 +331,7 @@ func TestFilterResponse(t *testing.T) {
 				roles: tt.userRoles,
 			}
 
-			app.Use(FilterResponse(&voter, roleProvider))
+			app.Use(FilterResponse(voter, roleProvider))
 
 			app.All("/test", func(c *fiber.Ctx) error {
 				return c.SendString("success")
@@ -369,10 +369,10 @@ func TestMiddlewareIntegration(t *testing.T) {
 		roles: []string{"user"},
 	}
 
-	app.Use(Middleware(&voter, roleProvider))
+	app.Use(Middleware(voter, roleProvider))
 
-	adminOnly := RequireRole(&voter, roleProvider, "admin")
-	userAllowed := RequireRole(&voter, roleProvider, "user")
+	adminOnly := RequireRole(voter, roleProvider, "admin")
+	userAllowed := RequireRole(voter, roleProvider, "user")
 
 	app.Get("/public", func(c *fiber.Ctx) error {
 		return c.SendString("public")
@@ -427,7 +427,7 @@ func TestMiddlewareContextPropagation(t *testing.T) {
 	}
 
 	app := fiber.New()
-	app.Use(Middleware(&voter, roleProvider))
+	app.Use(Middleware(voter, roleProvider))
 
 	app.Get("/test", func(c *fiber.Ctx) error {
 		roles := c.Locals("user_roles")
