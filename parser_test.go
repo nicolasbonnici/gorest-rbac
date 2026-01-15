@@ -469,7 +469,7 @@ func TestClearCache(t *testing.T) {
 
 type UnexportedFieldsResource struct {
 	Exported   string `rbac:"read:admin"`
-	unexported string `rbac:"read:admin"`
+	unexported string //nolint:unused
 }
 
 func TestParseAnnotationsUnexportedFields(t *testing.T) {

@@ -9,6 +9,7 @@ type contextKey string
 const (
 	rolesContextKey  contextKey = "rbac:roles"
 	userIDContextKey contextKey = "rbac:user_id"
+	fiberContextKey  contextKey = "rbac:fiber_ctx"
 )
 
 func WithRoles(ctx context.Context, roles []string) context.Context {

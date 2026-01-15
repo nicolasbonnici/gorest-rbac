@@ -364,25 +364,31 @@ func TestBuildRoleTree(t *testing.T) {
 				}
 			},
 		},
-		{
-			name: "circular dependency",
-			hierarchy: map[string][]string{
-				"admin":  {"editor"},
-				"editor": {"admin"},
-			},
-			validate: func(t *testing.T, roots []*RoleNode) {
-				if len(roots) == 0 {
-					t.Fatal("expected at least one root")
-				}
-			},
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			roots := BuildRoleTree(tt.hierarchy)
+			roots, err := BuildRoleTree(tt.hierarchy)
+			if err != nil {
+				t.Fatalf("BuildRoleTree failed: %v", err)
+			}
 			tt.validate(t, roots)
 		})
+	}
+}
+
+func TestBuildRoleTreeCircular(t *testing.T) {
+	hierarchy := map[string][]string{
+		"admin":  {"editor"},
+		"editor": {"admin"},
+	}
+
+	_, err := BuildRoleTree(hierarchy)
+	if err == nil {
+		t.Fatal("expected error for circular dependency, got nil")
+	}
+	if err != ErrCircularHierarchy {
+		t.Errorf("expected ErrCircularHierarchy, got %v", err)
 	}
 }
 
@@ -393,7 +399,10 @@ func TestBuildRoleNode(t *testing.T) {
 	}
 
 	visited := make(map[string]bool)
-	node := buildRoleNode("admin", hierarchy, visited)
+	node, err := buildRoleNode("admin", hierarchy, visited)
+	if err != nil {
+		t.Fatalf("buildRoleNode failed: %v", err)
+	}
 
 	if node.Name != "admin" {
 		t.Errorf("expected node name 'admin', got %s", node.Name)
@@ -418,24 +427,19 @@ func TestBuildRoleNode(t *testing.T) {
 
 func TestBuildRoleNodeCircular(t *testing.T) {
 	hierarchy := map[string][]string{
-		"admin":  {"admin"},
+		"admin": {"admin"},
 	}
 
 	visited := make(map[string]bool)
-	node := buildRoleNode("admin", hierarchy, visited)
-
-	if node.Name != "admin" {
-		t.Errorf("expected node name 'admin', got %s", node.Name)
+	_, err := buildRoleNode("admin", hierarchy, visited)
+	if err == nil {
+		t.Fatal("expected error for circular dependency, got nil")
 	}
-
-	if len(node.Children) != 1 {
-		t.Fatalf("expected 1 child (cycle marker), got %d", len(node.Children))
-	}
-
-	if node.Children[0].Name != "admin (cycle)" {
-		t.Errorf("expected child name 'admin (cycle)', got %s", node.Children[0].Name)
+	if err != ErrCircularHierarchy {
+		t.Errorf("expected ErrCircularHierarchy, got %v", err)
 	}
 }
+
 
 func TestClearHierarchyCache(t *testing.T) {
 	ClearHierarchyCache()
@@ -478,7 +482,9 @@ func TestExpandRole(t *testing.T) {
 	resolved := make(map[string]bool)
 	visited := make(map[string]bool)
 
-	expandRole("admin", hierarchy, resolved, visited)
+	if err := expandRole("admin", hierarchy, resolved, visited); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	expectedRoles := []string{"admin", "editor", "moderator", "user"}
 	if len(resolved) != len(expectedRoles) {
@@ -501,7 +507,9 @@ func TestExpandRoleCircular(t *testing.T) {
 	resolved := make(map[string]bool)
 	visited := make(map[string]bool)
 
-	expandRole("admin", hierarchy, resolved, visited)
+	if err := expandRole("admin", hierarchy, resolved, visited); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if len(resolved) != 2 {
 		t.Errorf("expected 2 roles, got %d", len(resolved))

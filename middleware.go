@@ -18,8 +18,7 @@ func Middleware(voter Voter, roleProvider RoleProvider) fiber.Handler {
 		// Add roles to context for downstream handlers
 		c.Locals("user_roles", roles)
 
-		// Store Fiber context in context.Context for role provider
-		ctxWithValues := context.WithValue(ctx, "fiber_ctx", c)
+		ctxWithValues := context.WithValue(ctx, fiberContextKey, c)
 		ctxWithValues = WithRoles(ctxWithValues, roles)
 		c.SetUserContext(ctxWithValues)
 

@@ -9,6 +9,10 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+type testContextKey string
+
+const customRolesKey testContextKey = "custom_roles"
+
 func TestNewDefaultRoleProvider(t *testing.T) {
 	provider := NewDefaultRoleProvider()
 
@@ -145,7 +149,7 @@ func TestFiberRoleProviderGetRoles(t *testing.T) {
 				reqCtx := &fasthttp.RequestCtx{}
 				c := app.AcquireCtx(reqCtx)
 				c.Locals("user_roles", []string{"admin", "user"})
-				return context.WithValue(context.Background(), "fiber_ctx", c)
+				return context.WithValue(context.Background(), fiberContextKey, c)
 			},
 			expectedRoles: []string{"admin", "user"},
 			expectError:   false,
@@ -157,7 +161,7 @@ func TestFiberRoleProviderGetRoles(t *testing.T) {
 				reqCtx := &fasthttp.RequestCtx{}
 				c := app.AcquireCtx(reqCtx)
 				c.Locals("user_roles", "admin")
-				return context.WithValue(context.Background(), "fiber_ctx", c)
+				return context.WithValue(context.Background(), fiberContextKey, c)
 			},
 			expectedRoles: []string{"admin"},
 			expectError:   false,
@@ -184,7 +188,7 @@ func TestFiberRoleProviderGetRoles(t *testing.T) {
 				app := fiber.New()
 				reqCtx := &fasthttp.RequestCtx{}
 				c := app.AcquireCtx(reqCtx)
-				return context.WithValue(context.Background(), "fiber_ctx", c)
+				return context.WithValue(context.Background(), fiberContextKey, c)
 			},
 			expectedRoles: []string{},
 			expectError:   false,
@@ -314,7 +318,7 @@ func TestCustomRoleProviderGetRoles(t *testing.T) {
 
 func TestCustomRoleProviderWithContextValue(t *testing.T) {
 	extractFunc := func(ctx context.Context) ([]string, error) {
-		if roles, ok := ctx.Value("custom_roles").([]string); ok {
+		if roles, ok := ctx.Value(customRolesKey).([]string); ok {
 			return roles, nil
 		}
 		return []string{"default"}, nil
@@ -322,7 +326,7 @@ func TestCustomRoleProviderWithContextValue(t *testing.T) {
 
 	provider := NewCustomRoleProvider(extractFunc)
 
-	ctx := context.WithValue(context.Background(), "custom_roles", []string{"admin", "user"})
+	ctx := context.WithValue(context.Background(), customRolesKey, []string{"admin", "user"})
 
 	roles, err := provider.GetRoles(ctx)
 	if err != nil {

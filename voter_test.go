@@ -67,6 +67,7 @@ func TestCheckRead(t *testing.T) {
 	ClearCache()
 
 	config := DefaultConfig()
+	config.SuperuserRole = "superadmin"
 	config.RoleHierarchy = map[string][]string{
 		"admin":  {"editor"},
 		"editor": {"user"},
@@ -220,6 +221,7 @@ func TestCheckWrite(t *testing.T) {
 	ClearCache()
 
 	config := DefaultConfig()
+	config.SuperuserRole = "superadmin"
 	config.RoleHierarchy = map[string][]string{
 		"admin":  {"editor"},
 		"editor": {"user"},
@@ -337,6 +339,7 @@ func TestFilterRead(t *testing.T) {
 	ClearCache()
 
 	config := DefaultConfig()
+	config.SuperuserRole = "superadmin"
 	config.DefaultFieldPolicy = "deny"
 
 	voter, err := NewVoter(config)

@@ -45,8 +45,11 @@ func (p *RBACPlugin) Initialize(config map[string]interface{}) error {
 	if roleHierarchy, ok := config["role_hierarchy"].(map[string][]string); ok {
 		p.config.RoleHierarchy = roleHierarchy
 	} else if roleHierarchy, ok := config["role_hierarchy"].(map[string]interface{}); ok {
-		// Handle YAML unmarshaling which may give us map[string]interface{}
-		p.config.RoleHierarchy = convertRoleHierarchy(roleHierarchy)
+		converted, err := convertRoleHierarchy(roleHierarchy)
+		if err != nil {
+			return fmt.Errorf("invalid role_hierarchy configuration: %w", err)
+		}
+		p.config.RoleHierarchy = converted
 	}
 
 	if cacheEnabled, ok := config["cache_enabled"].(bool); ok {
@@ -114,8 +117,7 @@ func (p *RBACPlugin) GetConfig() Config {
 	return p.config
 }
 
-// convertRoleHierarchy converts map[string]interface{} to map[string][]string
-func convertRoleHierarchy(input map[string]interface{}) map[string][]string {
+func convertRoleHierarchy(input map[string]interface{}) (map[string][]string, error) {
 	result := make(map[string][]string)
 
 	for key, value := range input {
@@ -123,16 +125,19 @@ func convertRoleHierarchy(input map[string]interface{}) map[string][]string {
 		case []string:
 			result[key] = v
 		case []interface{}:
-			// Convert []interface{} to []string
 			strSlice := make([]string, 0, len(v))
-			for _, item := range v {
-				if str, ok := item.(string); ok {
-					strSlice = append(strSlice, str)
+			for i, item := range v {
+				str, ok := item.(string)
+				if !ok {
+					return nil, fmt.Errorf("role_hierarchy[%s][%d]: expected string, got %T", key, i, item)
 				}
+				strSlice = append(strSlice, str)
 			}
 			result[key] = strSlice
+		default:
+			return nil, fmt.Errorf("role_hierarchy[%s]: expected []string or []interface{}, got %T", key, value)
 		}
 	}
 
-	return result
+	return result, nil
 }

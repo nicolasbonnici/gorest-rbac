@@ -43,7 +43,7 @@ func NewFiberRoleProvider(rolesKey, userIDKey string) RoleProvider {
 }
 
 func (p *FiberRoleProvider) GetRoles(ctx context.Context) ([]string, error) {
-	if fctx, ok := ctx.Value("fiber_ctx").(*fiber.Ctx); ok {
+	if fctx, ok := ctx.Value(fiberContextKey).(*fiber.Ctx); ok {
 		if roles := fctx.Locals(p.RolesKey); roles != nil {
 			switch v := roles.(type) {
 			case []string:

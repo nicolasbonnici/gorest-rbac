@@ -289,15 +289,6 @@ func TestConvertRoleHierarchy(t *testing.T) {
 			},
 		},
 		{
-			name: "interface slice with non-string values",
-			input: map[string]interface{}{
-				"admin": []interface{}{"user", 123, "editor"},
-			},
-			expected: map[string][]string{
-				"admin": {"user", "editor"},
-			},
-		},
-		{
 			name: "single role",
 			input: map[string]interface{}{
 				"admin": []interface{}{"user"},
@@ -319,7 +310,10 @@ func TestConvertRoleHierarchy(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := convertRoleHierarchy(tt.input)
+			result, err := convertRoleHierarchy(tt.input)
+			if err != nil {
+				t.Fatalf("convertRoleHierarchy failed: %v", err)
+			}
 
 			if len(result) != len(tt.expected) {
 				t.Errorf("expected %d entries, got %d", len(tt.expected), len(result))
@@ -342,6 +336,35 @@ func TestConvertRoleHierarchy(t *testing.T) {
 						t.Errorf("key %s, index %d: expected %s, got %s", key, i, expectedRole, actualRoles[i])
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestConvertRoleHierarchyErrors(t *testing.T) {
+	tests := []struct {
+		name  string
+		input map[string]interface{}
+	}{
+		{
+			name: "interface slice with non-string values",
+			input: map[string]interface{}{
+				"admin": []interface{}{"user", 123, "editor"},
+			},
+		},
+		{
+			name: "invalid type",
+			input: map[string]interface{}{
+				"admin": 123,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := convertRoleHierarchy(tt.input)
+			if err == nil {
+				t.Fatal("expected error, got nil")
 			}
 		})
 	}

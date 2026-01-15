@@ -36,7 +36,7 @@ func (r *Repository) GetUserRoles(ctx context.Context, userID string) ([]string,
 	if err != nil {
 		return nil, fmt.Errorf("failed to query user roles: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var roles []string
 	for rows.Next() {
@@ -150,7 +150,7 @@ func (r *Repository) ListRoles(ctx context.Context) ([]Role, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query roles: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var roles []Role
 	for rows.Next() {
@@ -183,7 +183,7 @@ func (r *Repository) GetRoleHierarchy(ctx context.Context) (map[string][]string,
 	if err != nil {
 		return nil, fmt.Errorf("failed to query role hierarchy: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	hierarchy := make(map[string][]string)
 	for rows.Next() {
@@ -200,8 +200,12 @@ func (r *Repository) GetRoleHierarchy(ctx context.Context) (map[string][]string,
 
 func (r *Repository) ListUsers(ctx context.Context) ([]UserRoles, error) {
 	query := `
-		SELECT DISTINCT ur.user_id, MAX(ur.assigned_at) as updated_at
+		SELECT
+			ur.user_id,
+			MAX(ur.assigned_at) as updated_at,
+			ARRAY_AGG(r.name ORDER BY r.name) as roles
 		FROM user_roles ur
+		JOIN roles r ON ur.role_id = r.id
 		GROUP BY ur.user_id
 		ORDER BY ur.user_id
 	`
@@ -210,7 +214,7 @@ func (r *Repository) ListUsers(ctx context.Context) ([]UserRoles, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query users: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var users []UserRoles
 	for rows.Next() {
@@ -221,16 +225,13 @@ func (r *Repository) ListUsers(ctx context.Context) ([]UserRoles, error) {
 		}
 
 		var userRoles UserRoles
-		if err := rows.Scan(&userRoles.UserID, &userRoles.UpdatedAt); err != nil {
+		var rolesArray []string
+
+		if err := rows.Scan(&userRoles.UserID, &userRoles.UpdatedAt, &rolesArray); err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
 
-		roles, err := r.GetUserRoles(ctx, userRoles.UserID)
-		if err != nil {
-			return nil, err
-		}
-
-		userRoles.Roles = roles
+		userRoles.Roles = rolesArray
 		users = append(users, userRoles)
 	}
 
@@ -238,12 +239,18 @@ func (r *Repository) ListUsers(ctx context.Context) ([]UserRoles, error) {
 }
 
 func (r *Repository) CreateRole(ctx context.Context, name, description, parent string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
 	query := `
 		INSERT INTO roles (id, name, description, parent)
 		VALUES ($1, $2, $3, NULLIF($4, ''))
 	`
 
-	_, err := r.db.Exec(ctx, query, uuid.New().String(), name, description, parent)
+	_, err = tx.Exec(ctx, query, uuid.New().String(), name, description, parent)
 	if err != nil {
 		return fmt.Errorf("failed to create role: %w", err)
 	}
@@ -254,10 +261,14 @@ func (r *Repository) CreateRole(ctx context.Context, name, description, parent s
 			VALUES ($1, $2)
 			ON CONFLICT DO NOTHING
 		`
-		_, err = r.db.Exec(ctx, hierQuery, parent, name)
+		_, err = tx.Exec(ctx, hierQuery, parent, name)
 		if err != nil {
 			return fmt.Errorf("failed to create hierarchy: %w", err)
 		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil
@@ -304,7 +315,7 @@ func (r *Repository) GetAuditLog(ctx context.Context, limit int) ([]AuditEntry, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to query audit log: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var entries []AuditEntry
 	for rows.Next() {

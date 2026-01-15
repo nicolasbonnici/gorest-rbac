@@ -10,54 +10,56 @@ var (
 )
 
 func ResolveRoles(roles []string, hierarchy map[string][]string) []string {
-	if len(roles) == 0 {
+	result, err := resolveRolesWithError(roles, hierarchy)
+	if err != nil {
 		return roles
 	}
+	return result
+}
 
-	// Use a map to track unique roles
-	resolved := make(map[string]bool)
-
-	// Recursively expand each role
-	for _, role := range roles {
-		expandRole(role, hierarchy, resolved, make(map[string]bool))
+func resolveRolesWithError(roles []string, hierarchy map[string][]string) ([]string, error) {
+	if len(roles) == 0 {
+		return roles, nil
 	}
 
-	// Convert map to slice
+	resolved := make(map[string]bool)
+
+	for _, role := range roles {
+		if err := expandRole(role, hierarchy, resolved, make(map[string]bool)); err != nil {
+			return nil, err
+		}
+	}
+
 	result := make([]string, 0, len(resolved))
 	for role := range resolved {
 		result = append(result, role)
 	}
 
-	return result
+	return result, nil
 }
 
-func expandRole(role string, hierarchy map[string][]string, resolved map[string]bool, visited map[string]bool) {
-	// If already resolved, skip
+func expandRole(role string, hierarchy map[string][]string, resolved map[string]bool, visited map[string]bool) error {
 	if resolved[role] {
-		return
+		return nil
 	}
 
-	// Check for cycle
 	if visited[role] {
-		// Cycle detected, skip to avoid infinite recursion
-		return
+		return ErrCircularHierarchy
 	}
 
-	// Mark as visited in current path
 	visited[role] = true
-
-	// Add this role to resolved set
 	resolved[role] = true
 
-	// Expand children (roles this role inherits from)
 	if children, ok := hierarchy[role]; ok {
 		for _, child := range children {
-			expandRole(child, hierarchy, resolved, visited)
+			if err := expandRole(child, hierarchy, resolved, visited); err != nil {
+				return err
+			}
 		}
 	}
 
-	// Remove from visited (backtrack)
 	delete(visited, role)
+	return nil
 }
 
 func HasRole(roles []string, requiredRole string, hierarchy map[string][]string) bool {
@@ -89,8 +91,7 @@ func HasAnyRole(roles []string, requiredRoles []string, hierarchy map[string][]s
 	return false
 }
 
-func BuildRoleTree(hierarchy map[string][]string) []*RoleNode {
-	// Find root roles (roles that are not children of any other role)
+func BuildRoleTree(hierarchy map[string][]string) ([]*RoleNode, error) {
 	childRoles := make(map[string]bool)
 	for _, children := range hierarchy {
 		for _, child := range children {
@@ -98,23 +99,33 @@ func BuildRoleTree(hierarchy map[string][]string) []*RoleNode {
 		}
 	}
 
-	// Build tree from roots
 	var roots []*RoleNode
 	for role := range hierarchy {
 		if !childRoles[role] {
-			// This is a root role
-			node := buildRoleNode(role, hierarchy, make(map[string]bool))
+			node, err := buildRoleNode(role, hierarchy, make(map[string]bool))
+			if err != nil {
+				return nil, err
+			}
 			roots = append(roots, node)
 		}
 	}
 
-	return roots
+	if len(roots) == 0 && len(hierarchy) > 0 {
+		for role := range hierarchy {
+			_, err := buildRoleNode(role, hierarchy, make(map[string]bool))
+			if err != nil {
+				return nil, err
+			}
+			break
+		}
+	}
+
+	return roots, nil
 }
 
-func buildRoleNode(role string, hierarchy map[string][]string, visited map[string]bool) *RoleNode {
-	// Prevent cycles
+func buildRoleNode(role string, hierarchy map[string][]string, visited map[string]bool) (*RoleNode, error) {
 	if visited[role] {
-		return &RoleNode{Name: role + " (cycle)", Children: nil}
+		return nil, ErrCircularHierarchy
 	}
 
 	visited[role] = true
@@ -124,17 +135,19 @@ func buildRoleNode(role string, hierarchy map[string][]string, visited map[strin
 		Children: []*RoleNode{},
 	}
 
-	// Add children
 	if children, ok := hierarchy[role]; ok {
 		for _, child := range children {
-			childNode := buildRoleNode(child, hierarchy, visited)
+			childNode, err := buildRoleNode(child, hierarchy, visited)
+			if err != nil {
+				return nil, err
+			}
 			node.Children = append(node.Children, childNode)
 		}
 	}
 
 	delete(visited, role)
 
-	return node
+	return node, nil
 }
 
 func ClearHierarchyCache() {

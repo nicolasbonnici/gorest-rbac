@@ -44,7 +44,7 @@ build: ## Build plugin
 
 build-cli: ## Build CLI tool
 	@echo "Building CLI tool..."
-	@go build -o rbac-cli ./cmd/rbac-cli
+	@cd cmd/rbac-cli && go build -o ../../rbac-cli
 	@echo "✓ CLI build successful: ./rbac-cli"
 
 clean: ## Clean build artifacts and caches
