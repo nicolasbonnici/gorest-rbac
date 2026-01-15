@@ -1,0 +1,10 @@
+# RBAC CLI Configuration File Example
+# Copy this file to .rbac-cli.yaml and customize for your environment
+
+# Database connection string
+# PostgreSQL format: postgres://user:password@host:port/database?sslmode=disable
+# SQLite format: /path/to/database.db or file:/path/to/database.sqlite
+database_url: postgres://user:password@localhost:5432/dbname?sslmode=disable
+
+# Default output format (table, json, or yaml)
+output: table

@@ -71,8 +71,11 @@ jobs:
       - name: Build plugin
         run: go build -v ./...
 
+      - name: Download CLI dependencies
+        run: cd cmd/rbac-cli && go mod download
+
       - name: Build CLI tool
-        run: go build -o rbac-cli ./cmd/rbac-cli
+        run: cd cmd/rbac-cli && go build -o ../../rbac-cli
 
       - name: Cleanup
         if: always()

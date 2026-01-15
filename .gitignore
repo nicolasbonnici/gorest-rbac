@@ -43,4 +43,5 @@ tmp/
 temp/
 
 # CLI binary
-rbac-cli
+/rbac-cli
+cmd/rbac-cli/rbac-cli
