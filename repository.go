@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nicolasbonnici/gorest/database"
+	"github.com/nicolasbonnici/gorest/query"
 )
 
 // Repository handles database operations for RBAC
@@ -24,15 +25,19 @@ func (r *Repository) GetUserRoles(ctx context.Context, userID string) ([]string,
 		return nil, fmt.Errorf("invalid user ID format: %w", err)
 	}
 
-	query := `
-		SELECT r.name
-		FROM user_roles ur
-		JOIN roles r ON ur.role_id = r.id
-		WHERE ur.user_id = $1
-		ORDER BY r.name
-	`
+	qb := query.New(r.db.Dialect()).
+		Select("r.name").
+		From("user_roles").As("ur").
+		JoinAs("roles", "r", query.ColEq("ur.role_id", "r.id")).
+		Where(query.Eq("ur.user_id", userID)).
+		OrderBy("r.name", query.ASC)
 
-	rows, err := r.db.Query(ctx, query, userID)
+	queryStr, args, err := qb.Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, queryStr, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query user roles: %w", err)
 	}
@@ -63,8 +68,19 @@ func (r *Repository) AssignRole(ctx context.Context, userID, roleName, assignedB
 		return fmt.Errorf("invalid assignedBy ID format: %w", err)
 	}
 
+	// Find role ID
+	selectQb := query.New(r.db.Dialect()).
+		Select("id").
+		From("roles").
+		Where(query.Eq("name", roleName))
+
+	selectQuery, selectArgs, err := selectQb.Build()
+	if err != nil {
+		return fmt.Errorf("failed to build select query: %w", err)
+	}
+
 	var roleID string
-	err := r.db.QueryRow(ctx, "SELECT id FROM roles WHERE name = $1", roleName).Scan(&roleID)
+	err = r.db.QueryRow(ctx, selectQuery, selectArgs...).Scan(&roleID)
 	if err == sql.ErrNoRows {
 		if logErr := r.logAudit(ctx, userID, "promote", roleName, assignedBy, false, "role not found"); logErr != nil {
 			return fmt.Errorf("role not found (audit log failed: %v)", logErr)
@@ -74,13 +90,21 @@ func (r *Repository) AssignRole(ctx context.Context, userID, roleName, assignedB
 		return fmt.Errorf("failed to find role: %w", err)
 	}
 
-	query := `
-		INSERT INTO user_roles (user_id, role_id, assigned_by, assigned_at)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (user_id, role_id) DO NOTHING
-	`
+	// Insert user role assignment
+	insertQb := query.New(r.db.Dialect()).
+		Insert("user_roles").
+		Columns("user_id", "role_id", "assigned_by", "assigned_at").
+		Values(userID, roleID, assignedBy, time.Now())
 
-	_, err = r.db.Exec(ctx, query, userID, roleID, assignedBy, time.Now())
+	insertQuery, insertArgs, err := insertQb.Build()
+	if err != nil {
+		return fmt.Errorf("failed to build insert query: %w", err)
+	}
+
+	// Add ON CONFLICT DO NOTHING for idempotent insert
+	insertQuery += " ON CONFLICT (user_id, role_id) DO NOTHING"
+
+	_, err = r.db.Exec(ctx, insertQuery, insertArgs...)
 	if err != nil {
 		if logErr := r.logAudit(ctx, userID, "promote", roleName, assignedBy, false, err.Error()); logErr != nil {
 			return fmt.Errorf("failed to assign role: %w (audit log failed: %v)", err, logErr)
@@ -104,8 +128,19 @@ func (r *Repository) RemoveRole(ctx context.Context, userID, roleName, removedBy
 		return fmt.Errorf("invalid removedBy ID format: %w", err)
 	}
 
+	// Find role ID
+	selectQb := query.New(r.db.Dialect()).
+		Select("id").
+		From("roles").
+		Where(query.Eq("name", roleName))
+
+	selectQuery, selectArgs, err := selectQb.Build()
+	if err != nil {
+		return fmt.Errorf("failed to build select query: %w", err)
+	}
+
 	var roleID string
-	err := r.db.QueryRow(ctx, "SELECT id FROM roles WHERE name = $1", roleName).Scan(&roleID)
+	err = r.db.QueryRow(ctx, selectQuery, selectArgs...).Scan(&roleID)
 	if err == sql.ErrNoRows {
 		if logErr := r.logAudit(ctx, userID, "demote", roleName, removedBy, false, "role not found"); logErr != nil {
 			return fmt.Errorf("role not found (audit log failed: %v)", logErr)
@@ -115,8 +150,20 @@ func (r *Repository) RemoveRole(ctx context.Context, userID, roleName, removedBy
 		return fmt.Errorf("failed to find role: %w", err)
 	}
 
-	query := "DELETE FROM user_roles WHERE user_id = $1 AND role_id = $2"
-	result, err := r.db.Exec(ctx, query, userID, roleID)
+	// Delete user role assignment
+	deleteQb := query.New(r.db.Dialect()).
+		Delete("user_roles").
+		Where(query.And(
+			query.Eq("user_id", userID),
+			query.Eq("role_id", roleID),
+		))
+
+	deleteQuery, deleteArgs, err := deleteQb.Build()
+	if err != nil {
+		return fmt.Errorf("failed to build delete query: %w", err)
+	}
+
+	result, err := r.db.Exec(ctx, deleteQuery, deleteArgs...)
 	if err != nil {
 		if logErr := r.logAudit(ctx, userID, "demote", roleName, removedBy, false, err.Error()); logErr != nil {
 			return fmt.Errorf("failed to remove role: %w (audit log failed: %v)", err, logErr)
@@ -140,13 +187,17 @@ func (r *Repository) RemoveRole(ctx context.Context, userID, roleName, removedBy
 }
 
 func (r *Repository) ListRoles(ctx context.Context) ([]Role, error) {
-	query := `
-		SELECT id, name, description, parent, created_at
-		FROM roles
-		ORDER BY name
-	`
+	qb := query.New(r.db.Dialect()).
+		Select("id", "name", "description", "parent", "created_at").
+		From("roles").
+		OrderBy("name", query.ASC)
 
-	rows, err := r.db.Query(ctx, query)
+	queryStr, args, err := qb.Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, queryStr, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query roles: %w", err)
 	}
@@ -169,17 +220,26 @@ func (r *Repository) ListRoles(ctx context.Context) ([]Role, error) {
 		roles = append(roles, role)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
 	return roles, nil
 }
 
 func (r *Repository) GetRoleHierarchy(ctx context.Context) (map[string][]string, error) {
-	query := `
-		SELECT parent_role, child_role
-		FROM role_hierarchy
-		ORDER BY parent_role, child_role
-	`
+	qb := query.New(r.db.Dialect()).
+		Select("parent_role", "child_role").
+		From("role_hierarchy").
+		OrderBy("parent_role", query.ASC).
+		OrderBy("child_role", query.ASC)
 
-	rows, err := r.db.Query(ctx, query)
+	queryStr, args, err := qb.Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, queryStr, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query role hierarchy: %w", err)
 	}
@@ -195,22 +255,32 @@ func (r *Repository) GetRoleHierarchy(ctx context.Context) (map[string][]string,
 		hierarchy[parent] = append(hierarchy[parent], child)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
 	return hierarchy, nil
 }
 
 func (r *Repository) ListUsers(ctx context.Context) ([]UserRoles, error) {
-	query := `
-		SELECT
-			ur.user_id,
-			MAX(ur.assigned_at) as updated_at,
-			ARRAY_AGG(r.name ORDER BY r.name) as roles
-		FROM user_roles ur
-		JOIN roles r ON ur.role_id = r.id
-		GROUP BY ur.user_id
-		ORDER BY ur.user_id
-	`
+	// This query uses PostgreSQL-specific ARRAY_AGG, so we use RawExpr for the aggregate
+	qb := query.New(r.db.Dialect()).
+		Select("ur.user_id").
+		SelectExpr(
+			query.As(query.Max(query.Col("ur.assigned_at")), "updated_at"),
+			query.RawExpr("ARRAY_AGG(r.name ORDER BY r.name) as roles"),
+		).
+		From("user_roles").As("ur").
+		JoinAs("roles", "r", query.ColEq("ur.role_id", "r.id")).
+		GroupBy("ur.user_id").
+		OrderBy("ur.user_id", query.ASC)
 
-	rows, err := r.db.Query(ctx, query)
+	queryStr, args, err := qb.Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, queryStr, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query users: %w", err)
 	}
@@ -235,6 +305,10 @@ func (r *Repository) ListUsers(ctx context.Context) ([]UserRoles, error) {
 		users = append(users, userRoles)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
 	return users, nil
 }
 
@@ -245,23 +319,45 @@ func (r *Repository) CreateRole(ctx context.Context, name, description, parent s
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	query := `
-		INSERT INTO roles (id, name, description, parent)
-		VALUES ($1, $2, $3, NULLIF($4, ''))
-	`
+	// Insert role - handle parent as NULL if empty
+	var parentValue any
+	if parent == "" {
+		parentValue = nil
+	} else {
+		parentValue = parent
+	}
 
-	_, err = tx.Exec(ctx, query, uuid.New().String(), name, description, parent)
+	insertQb := query.New(r.db.Dialect()).
+		Insert("roles").
+		Columns("id", "name", "description", "parent").
+		Values(uuid.New().String(), name, description, parentValue)
+
+	insertQuery, insertArgs, err := insertQb.Build()
+	if err != nil {
+		return fmt.Errorf("failed to build insert query: %w", err)
+	}
+
+	_, err = tx.Exec(ctx, insertQuery, insertArgs...)
 	if err != nil {
 		return fmt.Errorf("failed to create role: %w", err)
 	}
 
+	// Create hierarchy entry if parent is specified
 	if parent != "" {
-		hierQuery := `
-			INSERT INTO role_hierarchy (parent_role, child_role)
-			VALUES ($1, $2)
-			ON CONFLICT DO NOTHING
-		`
-		_, err = tx.Exec(ctx, hierQuery, parent, name)
+		hierQb := query.New(r.db.Dialect()).
+			Insert("role_hierarchy").
+			Columns("parent_role", "child_role").
+			Values(parent, name)
+
+		hierQuery, hierArgs, err := hierQb.Build()
+		if err != nil {
+			return fmt.Errorf("failed to build hierarchy insert query: %w", err)
+		}
+
+		// Add ON CONFLICT DO NOTHING
+		hierQuery += " ON CONFLICT DO NOTHING"
+
+		_, err = tx.Exec(ctx, hierQuery, hierArgs...)
 		if err != nil {
 			return fmt.Errorf("failed to create hierarchy: %w", err)
 		}
@@ -275,8 +371,16 @@ func (r *Repository) CreateRole(ctx context.Context, name, description, parent s
 }
 
 func (r *Repository) DeleteRole(ctx context.Context, name string) error {
-	query := "DELETE FROM roles WHERE name = $1"
-	result, err := r.db.Exec(ctx, query, name)
+	deleteQb := query.New(r.db.Dialect()).
+		Delete("roles").
+		Where(query.Eq("name", name))
+
+	deleteQuery, deleteArgs, err := deleteQb.Build()
+	if err != nil {
+		return fmt.Errorf("failed to build delete query: %w", err)
+	}
+
+	result, err := r.db.Exec(ctx, deleteQuery, deleteArgs...)
 	if err != nil {
 		return fmt.Errorf("failed to delete role: %w", err)
 	}
@@ -290,12 +394,25 @@ func (r *Repository) DeleteRole(ctx context.Context, name string) error {
 }
 
 func (r *Repository) logAudit(ctx context.Context, userID, action, role, actor string, success bool, errorMsg string) error {
-	query := `
-		INSERT INTO rbac_audit_log (user_id, action, role, actor, success, error)
-		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''))
-	`
+	// Handle empty error message as NULL
+	var errorValue any
+	if errorMsg == "" {
+		errorValue = nil
+	} else {
+		errorValue = errorMsg
+	}
 
-	_, err := r.db.Exec(ctx, query, userID, action, role, actor, success, errorMsg)
+	insertQb := query.New(r.db.Dialect()).
+		Insert("rbac_audit_log").
+		Columns("user_id", "action", "role", "actor", "success", "error").
+		Values(userID, action, role, actor, success, errorValue)
+
+	insertQuery, insertArgs, err := insertQb.Build()
+	if err != nil {
+		return fmt.Errorf("failed to build audit insert query: %w", err)
+	}
+
+	_, err = r.db.Exec(ctx, insertQuery, insertArgs...)
 	if err != nil {
 		return fmt.Errorf("failed to log audit entry: %w", err)
 	}
@@ -304,14 +421,19 @@ func (r *Repository) logAudit(ctx context.Context, userID, action, role, actor s
 }
 
 func (r *Repository) GetAuditLog(ctx context.Context, limit int) ([]AuditEntry, error) {
-	query := `
-		SELECT id, timestamp, user_id, action, role, actor, success, COALESCE(error, '') as error
-		FROM rbac_audit_log
-		ORDER BY timestamp DESC
-		LIMIT $1
-	`
+	qb := query.New(r.db.Dialect()).
+		Select("id", "timestamp", "user_id", "action", "role", "actor", "success").
+		SelectExpr(query.As(query.Coalesce(query.Col("error"), query.Literal("")), "error")).
+		From("rbac_audit_log").
+		OrderBy("timestamp", query.DESC).
+		Limit(limit)
 
-	rows, err := r.db.Query(ctx, query, limit)
+	queryStr, args, err := qb.Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, queryStr, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query audit log: %w", err)
 	}
@@ -335,6 +457,10 @@ func (r *Repository) GetAuditLog(ctx context.Context, limit int) ([]AuditEntry, 
 		}
 
 		entries = append(entries, entry)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
 	}
 
 	return entries, nil
