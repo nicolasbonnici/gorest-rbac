@@ -9,7 +9,7 @@ import (
 func Middleware(voter Voter, roleProvider RoleProvider) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Extract roles from request
-		ctx := c.Context()
+		ctx := c.UserContext()
 		roles, err := roleProvider.GetRoles(ctx)
 		if err != nil {
 			return fiber.NewError(fiber.StatusUnauthorized, "failed to extract roles")
@@ -30,7 +30,7 @@ func Middleware(voter Voter, roleProvider RoleProvider) fiber.Handler {
 
 func RequireRole(voter Voter, roleProvider RoleProvider, requiredRoles ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		ctx := c.Context()
+		ctx := c.UserContext()
 		roles, err := roleProvider.GetRoles(ctx)
 		if err != nil {
 			return fiber.NewError(fiber.StatusUnauthorized, "failed to extract roles")
@@ -61,7 +61,7 @@ func ValidateRequest(voter Voter, roleProvider RoleProvider, resourceType interf
 		}
 
 		// Extract roles
-		ctx := c.Context()
+		ctx := c.UserContext()
 		roles, err := roleProvider.GetRoles(ctx)
 		if err != nil {
 			return fiber.NewError(fiber.StatusUnauthorized, "failed to extract roles")
@@ -92,7 +92,7 @@ func FilterResponse(voter Voter, roleProvider RoleProvider) fiber.Handler {
 		}
 
 		// Extract roles
-		ctx := c.Context()
+		ctx := c.UserContext()
 		roles, err := roleProvider.GetRoles(ctx)
 		if err != nil {
 			return fiber.NewError(fiber.StatusUnauthorized, "failed to extract roles")
