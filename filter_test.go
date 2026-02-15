@@ -12,6 +12,58 @@ type FilterTestResource struct {
 	NoTagField  string
 }
 
+func validateDenyPolicyUserRole(t *testing.T, result interface{}) {
+	res, ok := result.(FilterTestResource)
+	if !ok {
+		t.Fatalf("expected FilterTestResource, got %T", result)
+	}
+	if res.PublicField != "public" {
+		t.Error("PublicField should be visible")
+	}
+	if res.UserField != "user" {
+		t.Error("UserField should be visible for user role")
+	}
+	if res.AdminField != "" {
+		t.Error("AdminField should be filtered for user role")
+	}
+	if res.NoTagField != "" {
+		t.Error("NoTagField should be filtered with deny policy")
+	}
+}
+
+func validateAllowPolicyUserRole(t *testing.T, result interface{}) {
+	res, ok := result.(FilterTestResource)
+	if !ok {
+		t.Fatalf("expected FilterTestResource, got %T", result)
+	}
+	if res.NoTagField != "notag" {
+		t.Error("NoTagField should be visible with allow policy")
+	}
+}
+
+func validateNoRoles(t *testing.T, result interface{}) {
+	res, ok := result.(FilterTestResource)
+	if !ok {
+		t.Fatalf("expected FilterTestResource, got %T", result)
+	}
+	if res.PublicField != "public" {
+		t.Error("PublicField should be visible")
+	}
+	if res.UserField != "" {
+		t.Error("UserField should be filtered with no roles")
+	}
+}
+
+func validatePointerResource(t *testing.T, result interface{}) {
+	res, ok := result.(*FilterTestResource)
+	if !ok {
+		t.Fatalf("expected *FilterTestResource, got %T", result)
+	}
+	if res.PublicField != "public" {
+		t.Error("PublicField should be visible")
+	}
+}
+
 func TestFilterReadFields(t *testing.T) {
 	ClearCache()
 
@@ -38,26 +90,8 @@ func TestFilterReadFields(t *testing.T) {
 				RoleHierarchy:      make(map[string][]string),
 				DefaultFieldPolicy: "deny",
 			},
-			expectError: false,
-			validateResult: func(t *testing.T, result interface{}) {
-				res, ok := result.(FilterTestResource)
-				if !ok {
-					t.Fatalf("expected FilterTestResource, got %T", result)
-				}
-
-				if res.PublicField != "public" {
-					t.Error("PublicField should be visible")
-				}
-				if res.UserField != "user" {
-					t.Error("UserField should be visible for user role")
-				}
-				if res.AdminField != "" {
-					t.Error("AdminField should be filtered for user role")
-				}
-				if res.NoTagField != "" {
-					t.Error("NoTagField should be filtered with deny policy")
-				}
-			},
+			expectError:    false,
+			validateResult: validateDenyPolicyUserRole,
 		},
 		{
 			name: "filter with allow policy - user role",
@@ -74,17 +108,8 @@ func TestFilterReadFields(t *testing.T) {
 				RoleHierarchy:      make(map[string][]string),
 				DefaultFieldPolicy: "allow",
 			},
-			expectError: false,
-			validateResult: func(t *testing.T, result interface{}) {
-				res, ok := result.(FilterTestResource)
-				if !ok {
-					t.Fatalf("expected FilterTestResource, got %T", result)
-				}
-
-				if res.NoTagField != "notag" {
-					t.Error("NoTagField should be visible with allow policy")
-				}
-			},
+			expectError:    false,
+			validateResult: validateAllowPolicyUserRole,
 		},
 		{
 			name: "filter with no roles",
@@ -101,20 +126,8 @@ func TestFilterReadFields(t *testing.T) {
 				RoleHierarchy:      make(map[string][]string),
 				DefaultFieldPolicy: "deny",
 			},
-			expectError: false,
-			validateResult: func(t *testing.T, result interface{}) {
-				res, ok := result.(FilterTestResource)
-				if !ok {
-					t.Fatalf("expected FilterTestResource, got %T", result)
-				}
-
-				if res.PublicField != "public" {
-					t.Error("PublicField should be visible")
-				}
-				if res.UserField != "" {
-					t.Error("UserField should be filtered with no roles")
-				}
-			},
+			expectError:    false,
+			validateResult: validateNoRoles,
 		},
 		{
 			name: "filter pointer resource",
@@ -130,17 +143,8 @@ func TestFilterReadFields(t *testing.T) {
 				RoleHierarchy:      make(map[string][]string),
 				DefaultFieldPolicy: "deny",
 			},
-			expectError: false,
-			validateResult: func(t *testing.T, result interface{}) {
-				res, ok := result.(*FilterTestResource)
-				if !ok {
-					t.Fatalf("expected *FilterTestResource, got %T", result)
-				}
-
-				if res.PublicField != "public" {
-					t.Error("PublicField should be visible")
-				}
-			},
+			expectError:    false,
+			validateResult: validatePointerResource,
 		},
 		{
 			name:        "invalid resource type",
@@ -153,24 +157,28 @@ func TestFilterReadFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := filterReadFields(tt.resource, tt.userRoles, tt.config)
-
-			if tt.expectError {
-				if err == nil {
-					t.Error("expected error, got nil")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
-			}
-
-			if tt.validateResult != nil {
-				tt.validateResult(t, result)
-			}
+			runFilterReadFieldsTest(t, tt.resource, tt.userRoles, tt.config, tt.expectError, tt.validateResult)
 		})
+	}
+}
+
+func runFilterReadFieldsTest(t *testing.T, resource interface{}, userRoles []string, config Config, expectError bool, validate func(*testing.T, interface{})) {
+	result, err := filterReadFields(resource, userRoles, config)
+
+	if expectError {
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+		return
+	}
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	if validate != nil {
+		validate(t, result)
 	}
 }
 
@@ -354,10 +362,10 @@ func TestFilterReadFieldsPreservesTypes(t *testing.T) {
 	ClearCache()
 
 	type ComplexResource struct {
-		IntField    int     `rbac:"read:*"`
-		FloatField  float64 `rbac:"read:admin"`
-		BoolField   bool    `rbac:"read:*"`
-		StringSlice []string `rbac:"read:admin"`
+		IntField    int               `rbac:"read:*"`
+		FloatField  float64           `rbac:"read:admin"`
+		BoolField   bool              `rbac:"read:*"`
+		StringSlice []string          `rbac:"read:admin"`
 		MapField    map[string]string `rbac:"read:*"`
 	}
 

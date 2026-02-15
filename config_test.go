@@ -210,9 +210,9 @@ func TestConfigValidateHierarchy(t *testing.T) {
 		{
 			name: "complex hierarchy without cycles",
 			hierarchy: map[string][]string{
-				"admin":   {"editor", "moderator"},
-				"editor":  {"author"},
-				"author":  {"user"},
+				"admin":     {"editor", "moderator"},
+				"editor":    {"author"},
+				"author":    {"user"},
 				"moderator": {"user"},
 			},
 			expectError: false,

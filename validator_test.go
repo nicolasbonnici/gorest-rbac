@@ -390,12 +390,12 @@ func TestValidateWriteFieldsComplexTypes(t *testing.T) {
 	ClearCache()
 
 	type ComplexResource struct {
-		IntField    int              `rbac:"write:admin"`
-		FloatField  float64          `rbac:"write:admin"`
-		BoolField   bool             `rbac:"write:admin"`
-		StringSlice []string         `rbac:"write:admin"`
+		IntField    int               `rbac:"write:admin"`
+		FloatField  float64           `rbac:"write:admin"`
+		BoolField   bool              `rbac:"write:admin"`
+		StringSlice []string          `rbac:"write:admin"`
 		MapField    map[string]string `rbac:"write:admin"`
-		PtrField    *string          `rbac:"write:admin"`
+		PtrField    *string           `rbac:"write:admin"`
 	}
 
 	config := DefaultConfig()
@@ -591,11 +591,11 @@ func TestStrictValidation(t *testing.T) {
 	ClearCache()
 
 	type StrictTestResource struct {
-		PublicField     string `rbac:"read:*;write:*"`
-		AdminField      string `rbac:"read:admin;write:admin"`
-		IntField        int    `rbac:"write:admin"`
-		BoolField       bool   `rbac:"write:admin"`
-		NoTagField      string
+		PublicField       string `rbac:"read:*;write:*"`
+		AdminField        string `rbac:"read:admin;write:admin"`
+		IntField          int    `rbac:"write:admin"`
+		BoolField         bool   `rbac:"write:admin"`
+		NoTagField        string
 		AnotherNoTagField int
 	}
 

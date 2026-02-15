@@ -80,31 +80,31 @@ func TestDefaultRoleProviderGetRoles(t *testing.T) {
 
 func TestNewFiberRoleProvider(t *testing.T) {
 	tests := []struct {
-		name             string
-		rolesKey         string
-		userIDKey        string
-		expectedRolesKey string
+		name              string
+		rolesKey          string
+		userIDKey         string
+		expectedRolesKey  string
 		expectedUserIDKey string
 	}{
 		{
-			name:             "default keys",
-			rolesKey:         "",
-			userIDKey:        "",
-			expectedRolesKey: "user_roles",
+			name:              "default keys",
+			rolesKey:          "",
+			userIDKey:         "",
+			expectedRolesKey:  "user_roles",
 			expectedUserIDKey: "user_id",
 		},
 		{
-			name:             "custom keys",
-			rolesKey:         "custom_roles",
-			userIDKey:        "custom_user_id",
-			expectedRolesKey: "custom_roles",
+			name:              "custom keys",
+			rolesKey:          "custom_roles",
+			userIDKey:         "custom_user_id",
+			expectedRolesKey:  "custom_roles",
 			expectedUserIDKey: "custom_user_id",
 		},
 		{
-			name:             "partial custom keys",
-			rolesKey:         "custom_roles",
-			userIDKey:        "",
-			expectedRolesKey: "custom_roles",
+			name:              "partial custom keys",
+			rolesKey:          "custom_roles",
+			userIDKey:         "",
+			expectedRolesKey:  "custom_roles",
 			expectedUserIDKey: "user_id",
 		},
 	}

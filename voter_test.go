@@ -7,12 +7,12 @@ import (
 )
 
 type VoterTestResource struct {
-	PublicField  string `rbac:"read:*;write:*"`
-	UserField    string `rbac:"read:user,editor,admin;write:editor,admin"`
-	AdminField   string `rbac:"read:admin;write:admin"`
-	AnyField     string `rbac:"read:any;write:any"`
-	NoneField    string `rbac:"read:none;write:none"`
-	NoTagField   string
+	PublicField string `rbac:"read:*;write:*"`
+	UserField   string `rbac:"read:user,editor,admin;write:editor,admin"`
+	AdminField  string `rbac:"read:admin;write:admin"`
+	AnyField    string `rbac:"read:any;write:any"`
+	NoneField   string `rbac:"read:none;write:none"`
+	NoTagField  string
 }
 
 func TestNewVoter(t *testing.T) {
@@ -335,6 +335,33 @@ func TestCheckWriteValidation(t *testing.T) {
 	}
 }
 
+type filterReadExpectations struct {
+	expectPublic bool
+	expectUser   bool
+	expectAdmin  bool
+	expectAny    bool
+	expectNone   bool
+	expectNoTag  bool
+}
+
+func validateFilterReadField(t *testing.T, fieldName, fieldValue string, expected bool) {
+	if expected && fieldValue == "" {
+		t.Errorf("expected %s to be visible", fieldName)
+	}
+	if !expected && fieldValue != "" {
+		t.Errorf("expected %s to be filtered", fieldName)
+	}
+}
+
+func validateFilterReadResult(t *testing.T, result VoterTestResource, exp filterReadExpectations) {
+	validateFilterReadField(t, "PublicField", result.PublicField, exp.expectPublic)
+	validateFilterReadField(t, "UserField", result.UserField, exp.expectUser)
+	validateFilterReadField(t, "AdminField", result.AdminField, exp.expectAdmin)
+	validateFilterReadField(t, "AnyField", result.AnyField, exp.expectAny)
+	validateFilterReadField(t, "NoneField", result.NoneField, exp.expectNone)
+	validateFilterReadField(t, "NoTagField", result.NoTagField, exp.expectNoTag)
+}
+
 func TestFilterRead(t *testing.T) {
 	ClearCache()
 
@@ -357,44 +384,35 @@ func TestFilterRead(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
-		roles         []string
-		expectPublic  bool
-		expectUser    bool
-		expectAdmin   bool
-		expectAny     bool
-		expectNone    bool
-		expectNoTag   bool
+		name   string
+		roles  []string
+		expect filterReadExpectations
 	}{
 		{
-			name:         "no roles",
-			roles:        []string{},
-			expectPublic: true,
-			expectUser:   false,
-			expectAdmin:  false,
-			expectAny:    false,
-			expectNone:   false,
-			expectNoTag:  false,
+			name:  "no roles",
+			roles: []string{},
+			expect: filterReadExpectations{
+				expectPublic: true,
+			},
 		},
 		{
-			name:         "user role",
-			roles:        []string{"user"},
-			expectPublic: true,
-			expectUser:   true,
-			expectAdmin:  false,
-			expectAny:    true,
-			expectNone:   false,
-			expectNoTag:  false,
+			name:  "user role",
+			roles: []string{"user"},
+			expect: filterReadExpectations{
+				expectPublic: true,
+				expectUser:   true,
+				expectAny:    true,
+			},
 		},
 		{
-			name:         "admin role",
-			roles:        []string{"admin"},
-			expectPublic: true,
-			expectUser:   true,
-			expectAdmin:  true,
-			expectAny:    true,
-			expectNone:   false,
-			expectNoTag:  false,
+			name:  "admin role",
+			roles: []string{"admin"},
+			expect: filterReadExpectations{
+				expectPublic: true,
+				expectUser:   true,
+				expectAdmin:  true,
+				expectAny:    true,
+			},
 		},
 	}
 
@@ -412,47 +430,7 @@ func TestFilterRead(t *testing.T) {
 				t.Fatalf("expected VoterTestResource, got %T", filtered)
 			}
 
-			if tt.expectPublic && result.PublicField == "" {
-				t.Error("expected PublicField to be visible")
-			}
-			if !tt.expectPublic && result.PublicField != "" {
-				t.Error("expected PublicField to be filtered")
-			}
-
-			if tt.expectUser && result.UserField == "" {
-				t.Error("expected UserField to be visible")
-			}
-			if !tt.expectUser && result.UserField != "" {
-				t.Error("expected UserField to be filtered")
-			}
-
-			if tt.expectAdmin && result.AdminField == "" {
-				t.Error("expected AdminField to be visible")
-			}
-			if !tt.expectAdmin && result.AdminField != "" {
-				t.Error("expected AdminField to be filtered")
-			}
-
-			if tt.expectAny && result.AnyField == "" {
-				t.Error("expected AnyField to be visible")
-			}
-			if !tt.expectAny && result.AnyField != "" {
-				t.Error("expected AnyField to be filtered")
-			}
-
-			if tt.expectNone && result.NoneField == "" {
-				t.Error("expected NoneField to be visible")
-			}
-			if !tt.expectNone && result.NoneField != "" {
-				t.Error("expected NoneField to be filtered")
-			}
-
-			if tt.expectNoTag && result.NoTagField == "" {
-				t.Error("expected NoTagField to be visible")
-			}
-			if !tt.expectNoTag && result.NoTagField != "" {
-				t.Error("expected NoTagField to be filtered")
-			}
+			validateFilterReadResult(t, result, tt.expect)
 		})
 	}
 }

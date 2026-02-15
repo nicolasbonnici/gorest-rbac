@@ -145,7 +145,7 @@ func initDB(cmd *cobra.Command, args []string) error {
 	// Skip for commands that don't need DB
 	cmdName := cmd.Name()
 	if cmdName == "config" || cmdName == "init" || cmdName == "show" || cmdName == "path" ||
-	   cmdName == "help" || cmdName == "version" || cmdName == "completion" {
+		cmdName == "help" || cmdName == "version" || cmdName == "completion" {
 		return nil
 	}
 
