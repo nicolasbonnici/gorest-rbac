@@ -30,6 +30,86 @@ func TestPluginName(t *testing.T) {
 	}
 }
 
+func validateDefaultConfig(t *testing.T, p *RBACPlugin) {
+	if p.config.DefaultPolicy != DenyAll {
+		t.Errorf("expected default policy DenyAll, got %s", p.config.DefaultPolicy)
+	}
+	if p.config.SuperuserRole != "admin" {
+		t.Errorf("expected superuser role 'admin', got %s", p.config.SuperuserRole)
+	}
+}
+
+func validateCustomPolicy(t *testing.T, p *RBACPlugin) {
+	if p.config.DefaultPolicy != AllowAll {
+		t.Errorf("expected default policy AllowAll, got %s", p.config.DefaultPolicy)
+	}
+}
+
+func validateSuperuserRole(t *testing.T, p *RBACPlugin) {
+	if p.config.SuperuserRole != "superadmin" {
+		t.Errorf("expected superuser role 'superadmin', got %s", p.config.SuperuserRole)
+	}
+}
+
+func validateRoleHierarchy(t *testing.T, p *RBACPlugin) {
+	if len(p.config.RoleHierarchy) != 2 {
+		t.Errorf("expected 2 hierarchy entries, got %d", len(p.config.RoleHierarchy))
+	}
+	adminRoles, ok := p.config.RoleHierarchy["admin"]
+	if !ok {
+		t.Error("expected 'admin' in hierarchy")
+		return
+	}
+	if len(adminRoles) != 2 {
+		t.Errorf("expected 2 child roles for admin, got %d", len(adminRoles))
+	}
+}
+
+func validateCacheSettings(t *testing.T, p *RBACPlugin) {
+	if p.config.CacheEnabled {
+		t.Error("expected cache to be disabled")
+	}
+	if p.config.CacheTTL != 600 {
+		t.Errorf("expected cache TTL 600, got %d", p.config.CacheTTL)
+	}
+}
+
+func validateStrictMode(t *testing.T, p *RBACPlugin) {
+	if p.config.StrictMode {
+		t.Error("expected strict mode to be disabled")
+	}
+}
+
+func validateFieldPolicy(t *testing.T, p *RBACPlugin) {
+	if p.config.DefaultFieldPolicy != "allow" {
+		t.Errorf("expected default field policy 'allow', got %s", p.config.DefaultFieldPolicy)
+	}
+}
+
+func validateCombinedSettings(t *testing.T, p *RBACPlugin) {
+	if p.config.DefaultPolicy != AllowAll {
+		t.Error("DefaultPolicy mismatch")
+	}
+	if p.config.SuperuserRole != "superadmin" {
+		t.Error("SuperuserRole mismatch")
+	}
+	if !p.config.CacheEnabled {
+		t.Error("CacheEnabled mismatch")
+	}
+	if p.config.CacheTTL != 600 {
+		t.Error("CacheTTL mismatch")
+	}
+	if p.config.StrictMode {
+		t.Error("StrictMode mismatch")
+	}
+	if p.config.DefaultFieldPolicy != "allow" {
+		t.Error("DefaultFieldPolicy mismatch")
+	}
+	if len(p.config.RoleHierarchy) != 2 {
+		t.Error("RoleHierarchy mismatch")
+	}
+}
+
 func TestPluginInitialize(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -41,14 +121,7 @@ func TestPluginInitialize(t *testing.T) {
 			name:        "empty config uses defaults",
 			config:      map[string]interface{}{},
 			expectError: false,
-			validate: func(t *testing.T, p *RBACPlugin) {
-				if p.config.DefaultPolicy != DenyAll {
-					t.Errorf("expected default policy DenyAll, got %s", p.config.DefaultPolicy)
-				}
-				if p.config.SuperuserRole != "admin" {
-					t.Errorf("expected superuser role 'admin', got %s", p.config.SuperuserRole)
-				}
-			},
+			validate:    validateDefaultConfig,
 		},
 		{
 			name: "custom default policy",
@@ -56,11 +129,7 @@ func TestPluginInitialize(t *testing.T) {
 				"default_policy": "allow_all",
 			},
 			expectError: false,
-			validate: func(t *testing.T, p *RBACPlugin) {
-				if p.config.DefaultPolicy != AllowAll {
-					t.Errorf("expected default policy AllowAll, got %s", p.config.DefaultPolicy)
-				}
-			},
+			validate:    validateCustomPolicy,
 		},
 		{
 			name: "custom superuser role",
@@ -68,11 +137,7 @@ func TestPluginInitialize(t *testing.T) {
 				"superuser_role": "superadmin",
 			},
 			expectError: false,
-			validate: func(t *testing.T, p *RBACPlugin) {
-				if p.config.SuperuserRole != "superadmin" {
-					t.Errorf("expected superuser role 'superadmin', got %s", p.config.SuperuserRole)
-				}
-			},
+			validate:    validateSuperuserRole,
 		},
 		{
 			name: "role hierarchy - map[string][]string",
@@ -83,18 +148,7 @@ func TestPluginInitialize(t *testing.T) {
 				},
 			},
 			expectError: false,
-			validate: func(t *testing.T, p *RBACPlugin) {
-				if len(p.config.RoleHierarchy) != 2 {
-					t.Errorf("expected 2 hierarchy entries, got %d", len(p.config.RoleHierarchy))
-				}
-
-				adminRoles, ok := p.config.RoleHierarchy["admin"]
-				if !ok {
-					t.Error("expected 'admin' in hierarchy")
-				} else if len(adminRoles) != 2 {
-					t.Errorf("expected 2 child roles for admin, got %d", len(adminRoles))
-				}
-			},
+			validate:    validateRoleHierarchy,
 		},
 		{
 			name: "role hierarchy - map[string]interface{}",
@@ -105,18 +159,7 @@ func TestPluginInitialize(t *testing.T) {
 				},
 			},
 			expectError: false,
-			validate: func(t *testing.T, p *RBACPlugin) {
-				if len(p.config.RoleHierarchy) != 2 {
-					t.Errorf("expected 2 hierarchy entries, got %d", len(p.config.RoleHierarchy))
-				}
-
-				adminRoles, ok := p.config.RoleHierarchy["admin"]
-				if !ok {
-					t.Error("expected 'admin' in hierarchy")
-				} else if len(adminRoles) != 2 {
-					t.Errorf("expected 2 child roles for admin, got %d", len(adminRoles))
-				}
-			},
+			validate:    validateRoleHierarchy,
 		},
 		{
 			name: "cache settings",
@@ -125,14 +168,7 @@ func TestPluginInitialize(t *testing.T) {
 				"cache_ttl":     600,
 			},
 			expectError: false,
-			validate: func(t *testing.T, p *RBACPlugin) {
-				if p.config.CacheEnabled {
-					t.Error("expected cache to be disabled")
-				}
-				if p.config.CacheTTL != 600 {
-					t.Errorf("expected cache TTL 600, got %d", p.config.CacheTTL)
-				}
-			},
+			validate:    validateCacheSettings,
 		},
 		{
 			name: "strict mode",
@@ -140,11 +176,7 @@ func TestPluginInitialize(t *testing.T) {
 				"strict_mode": false,
 			},
 			expectError: false,
-			validate: func(t *testing.T, p *RBACPlugin) {
-				if p.config.StrictMode {
-					t.Error("expected strict mode to be disabled")
-				}
-			},
+			validate:    validateStrictMode,
 		},
 		{
 			name: "default field policy",
@@ -152,11 +184,7 @@ func TestPluginInitialize(t *testing.T) {
 				"default_field_policy": "allow",
 			},
 			expectError: false,
-			validate: func(t *testing.T, p *RBACPlugin) {
-				if p.config.DefaultFieldPolicy != "allow" {
-					t.Errorf("expected default field policy 'allow', got %s", p.config.DefaultFieldPolicy)
-				}
-			},
+			validate:    validateFieldPolicy,
 		},
 		{
 			name: "invalid config - empty superuser role",
@@ -178,11 +206,11 @@ func TestPluginInitialize(t *testing.T) {
 		{
 			name: "all settings combined",
 			config: map[string]interface{}{
-				"default_policy":   "allow_all",
-				"superuser_role":   "superadmin",
-				"cache_enabled":    true,
-				"cache_ttl":        600,
-				"strict_mode":      false,
+				"default_policy":       "allow_all",
+				"superuser_role":       "superadmin",
+				"cache_enabled":        true,
+				"cache_ttl":            600,
+				"strict_mode":          false,
 				"default_field_policy": "allow",
 				"role_hierarchy": map[string][]string{
 					"superadmin": {"admin"},
@@ -190,61 +218,43 @@ func TestPluginInitialize(t *testing.T) {
 				},
 			},
 			expectError: false,
-			validate: func(t *testing.T, p *RBACPlugin) {
-				if p.config.DefaultPolicy != AllowAll {
-					t.Error("DefaultPolicy mismatch")
-				}
-				if p.config.SuperuserRole != "superadmin" {
-					t.Error("SuperuserRole mismatch")
-				}
-				if !p.config.CacheEnabled {
-					t.Error("CacheEnabled mismatch")
-				}
-				if p.config.CacheTTL != 600 {
-					t.Error("CacheTTL mismatch")
-				}
-				if p.config.StrictMode {
-					t.Error("StrictMode mismatch")
-				}
-				if p.config.DefaultFieldPolicy != "allow" {
-					t.Error("DefaultFieldPolicy mismatch")
-				}
-				if len(p.config.RoleHierarchy) != 2 {
-					t.Error("RoleHierarchy mismatch")
-				}
-			},
+			validate:    validateCombinedSettings,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			plugin := &RBACPlugin{}
-			err := plugin.Initialize(tt.config)
-
-			if tt.expectError {
-				if err == nil {
-					t.Error("expected error, got nil")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
-			}
-
-			if tt.validate != nil {
-				tt.validate(t, plugin)
-			}
-
-			if plugin.voter == nil {
-				t.Error("expected voter to be initialized")
-			}
-
-			if plugin.roleProvider == nil {
-				t.Error("expected role provider to be initialized")
-			}
+			runPluginInitTest(t, tt.config, tt.expectError, tt.validate)
 		})
+	}
+}
+
+func runPluginInitTest(t *testing.T, config map[string]interface{}, expectError bool, validate func(*testing.T, *RBACPlugin)) {
+	plugin := &RBACPlugin{}
+	err := plugin.Initialize(config)
+
+	if expectError {
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+		return
+	}
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	if validate != nil {
+		validate(t, plugin)
+	}
+
+	if plugin.voter == nil {
+		t.Error("expected voter to be initialized")
+	}
+
+	if plugin.roleProvider == nil {
+		t.Error("expected role provider to be initialized")
 	}
 }
 
@@ -255,8 +265,8 @@ func TestConvertRoleHierarchy(t *testing.T) {
 		expected map[string][]string
 	}{
 		{
-			name:  "empty map",
-			input: map[string]interface{}{},
+			name:     "empty map",
+			input:    map[string]interface{}{},
 			expected: map[string][]string{},
 		},
 		{

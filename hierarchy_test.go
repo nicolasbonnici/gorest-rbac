@@ -81,8 +81,8 @@ func TestResolveRoles(t *testing.T) {
 			name:  "diamond hierarchy",
 			roles: []string{"admin"},
 			hierarchy: map[string][]string{
-				"admin":  {"editor", "moderator"},
-				"editor": {"user"},
+				"admin":     {"editor", "moderator"},
+				"editor":    {"user"},
 				"moderator": {"user"},
 			},
 			expected: []string{"admin", "editor", "moderator", "user"},
@@ -108,8 +108,8 @@ func TestResolveRoles(t *testing.T) {
 			name:  "circular dependency - three roles",
 			roles: []string{"admin"},
 			hierarchy: map[string][]string{
-				"admin":  {"editor"},
-				"editor": {"moderator"},
+				"admin":     {"editor"},
+				"editor":    {"moderator"},
 				"moderator": {"admin"},
 			},
 			expected: []string{"admin", "editor", "moderator"},
@@ -439,7 +439,6 @@ func TestBuildRoleNodeCircular(t *testing.T) {
 		t.Errorf("expected ErrCircularHierarchy, got %v", err)
 	}
 }
-
 
 func TestClearHierarchyCache(t *testing.T) {
 	ClearHierarchyCache()

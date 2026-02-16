@@ -35,14 +35,14 @@ func TestParseAnnotations(t *testing.T) {
 	ClearCache()
 
 	tests := []struct {
-		name         string
-		resource     interface{}
-		expectError  bool
+		name          string
+		resource      interface{}
+		expectError   bool
 		expectedPerms map[string]Permission
 	}{
 		{
-			name:     "valid resource with multiple permissions",
-			resource: TestResource{},
+			name:        "valid resource with multiple permissions",
+			resource:    TestResource{},
 			expectError: false,
 			expectedPerms: map[string]Permission{
 				"ID": {
@@ -85,24 +85,24 @@ func TestParseAnnotations(t *testing.T) {
 			},
 		},
 		{
-			name:         "invalid format - missing operation",
-			resource:     InvalidResource{},
-			expectError:  true,
+			name:        "invalid format - missing operation",
+			resource:    InvalidResource{},
+			expectError: true,
 		},
 		{
-			name:         "invalid operation name",
-			resource:     InvalidOperationResource{},
-			expectError:  true,
+			name:        "invalid operation name",
+			resource:    InvalidOperationResource{},
+			expectError: true,
 		},
 		{
-			name:     "empty roles are valid",
-			resource: EmptyRolesResource{},
-			expectError: false,
+			name:          "empty roles are valid",
+			resource:      EmptyRolesResource{},
+			expectError:   false,
 			expectedPerms: map[string]Permission{},
 		},
 		{
-			name:     "mixed format with spaces",
-			resource: MixedFormatResource{},
+			name:        "mixed format with spaces",
+			resource:    MixedFormatResource{},
 			expectError: false,
 			expectedPerms: map[string]Permission{
 				"Field": {
@@ -202,9 +202,9 @@ func TestParseTag(t *testing.T) {
 		expected    Permission
 	}{
 		{
-			name:      "simple read permission",
-			fieldName: "Field",
-			tag:       "read:admin",
+			name:        "simple read permission",
+			fieldName:   "Field",
+			tag:         "read:admin",
 			expectError: false,
 			expected: Permission{
 				Field: "Field",
@@ -213,9 +213,9 @@ func TestParseTag(t *testing.T) {
 			},
 		},
 		{
-			name:      "simple write permission",
-			fieldName: "Field",
-			tag:       "write:editor",
+			name:        "simple write permission",
+			fieldName:   "Field",
+			tag:         "write:editor",
 			expectError: false,
 			expected: Permission{
 				Field: "Field",
@@ -224,9 +224,9 @@ func TestParseTag(t *testing.T) {
 			},
 		},
 		{
-			name:      "read and write permissions",
-			fieldName: "Field",
-			tag:       "read:user,editor;write:admin",
+			name:        "read and write permissions",
+			fieldName:   "Field",
+			tag:         "read:user,editor;write:admin",
 			expectError: false,
 			expected: Permission{
 				Field: "Field",
@@ -235,9 +235,9 @@ func TestParseTag(t *testing.T) {
 			},
 		},
 		{
-			name:      "special keyword - star",
-			fieldName: "Field",
-			tag:       "read:*;write:*",
+			name:        "special keyword - star",
+			fieldName:   "Field",
+			tag:         "read:*;write:*",
 			expectError: false,
 			expected: Permission{
 				Field: "Field",
@@ -246,9 +246,9 @@ func TestParseTag(t *testing.T) {
 			},
 		},
 		{
-			name:      "special keyword - any",
-			fieldName: "Field",
-			tag:       "read:any;write:any",
+			name:        "special keyword - any",
+			fieldName:   "Field",
+			tag:         "read:any;write:any",
 			expectError: false,
 			expected: Permission{
 				Field: "Field",
@@ -257,9 +257,9 @@ func TestParseTag(t *testing.T) {
 			},
 		},
 		{
-			name:      "special keyword - none",
-			fieldName: "Field",
-			tag:       "read:none;write:none",
+			name:        "special keyword - none",
+			fieldName:   "Field",
+			tag:         "read:none;write:none",
 			expectError: false,
 			expected: Permission{
 				Field: "Field",
@@ -291,9 +291,9 @@ func TestParseTag(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name:      "case insensitive operations",
-			fieldName: "Field",
-			tag:       "READ:admin;WRITE:editor",
+			name:        "case insensitive operations",
+			fieldName:   "Field",
+			tag:         "READ:admin;WRITE:editor",
 			expectError: false,
 			expected: Permission{
 				Field: "Field",
@@ -302,9 +302,9 @@ func TestParseTag(t *testing.T) {
 			},
 		},
 		{
-			name:      "whitespace handling",
-			fieldName: "Field",
-			tag:       " read : user , editor ; write : admin ",
+			name:        "whitespace handling",
+			fieldName:   "Field",
+			tag:         " read : user , editor ; write : admin ",
 			expectError: false,
 			expected: Permission{
 				Field: "Field",
@@ -313,9 +313,9 @@ func TestParseTag(t *testing.T) {
 			},
 		},
 		{
-			name:      "multiple roles with spaces",
-			fieldName: "Field",
-			tag:       "read: role1 , role2 , role3",
+			name:        "multiple roles with spaces",
+			fieldName:   "Field",
+			tag:         "read: role1 , role2 , role3",
 			expectError: false,
 			expected: Permission{
 				Field: "Field",
@@ -469,7 +469,7 @@ func TestClearCache(t *testing.T) {
 
 type UnexportedFieldsResource struct {
 	Exported   string `rbac:"read:admin"`
-	unexported string //nolint:unused
+	unexported string //lint:ignore U1000 intentionally unused field for testing unexported field handling
 }
 
 func TestParseAnnotationsUnexportedFields(t *testing.T) {

@@ -17,10 +17,10 @@ var (
 
 // FieldPermissionError represents a permission error for a specific field
 type FieldPermissionError struct {
-	Field      string
-	Operation  string // "read" or "write"
-	Required   []string
-	UserRoles  []string
+	Field     string
+	Operation string // "read" or "write"
+	Required  []string
+	UserRoles []string
 }
 
 func (e *FieldPermissionError) Error() string {
