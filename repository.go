@@ -267,7 +267,7 @@ func (r *Repository) ListUsers(ctx context.Context) ([]UserRoles, error) {
 	qb := query.New(r.db.Dialect()).
 		Select("ur.user_id").
 		SelectExpr(
-			query.As(query.Max(query.Col("ur.assigned_at")), "updated_at"),
+			query.RawExpr("MAX(ur.assigned_at) AS updated_at"),
 			query.RawExpr("ARRAY_AGG(r.name ORDER BY r.name) as roles"),
 		).
 		From("user_roles").As("ur").
