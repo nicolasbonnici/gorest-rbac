@@ -90,7 +90,7 @@ func (p *RBACPlugin) Handler() fiber.Handler {
 	return Middleware(p.voter, p.roleProvider)
 }
 
-func (p *RBACPlugin) SetupEndpoints(app *fiber.App) error {
+func (p *RBACPlugin) SetupEndpoints(router fiber.Router) error {
 	// Optionally setup management endpoints for roles
 	// This could include endpoints to:
 	// - List roles
